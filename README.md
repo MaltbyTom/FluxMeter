@@ -1,6 +1,6 @@
-Flux Meter
+# Flux Meter
 
-Mathematical Notes
+## Mathematical Notes
 
 The visualization renders hypotrochoids: curves traced by a point on a wheel of radius r rolling inside a fixed circle of radius R, with the drawing point at distance d from the wheel's center.
 x(t) = (R−r)·cos(t) + d·cos((R−r)/r · t)
@@ -17,5 +17,8 @@ Seed modes determine the RNG input: timestamp jitter (sampling system clock entr
 When R/r is rational, traces close into finite flowers. When irrational, they search without resolution. The noise ensures both feel alive.
 
 Live metrics — click any metric to toggle it on the sparkline. Heat peak tracks convergence attractors via dynamic normalization against session maximum. Cold void measures negative space — regions the geometry actively avoids within the drawing radius. Coherence scores harmonic relationships between R/r ratios across traces. Phase sync measures how closely trace cycle positions align. Settings changes and events are logged with full parameter state. DUMP LOG exports timestamped CSV.
+
+---
+
 Lineage: clock-jitter environmental flux meter (T. Maltby, 1991) → CREATE Framework (2025) → Flux Meter (2026).
 © T. Maltby & Claude, 2026. CC BY-SA 4.0. Recursive attribution required. 
