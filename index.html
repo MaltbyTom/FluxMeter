@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flux Meter — T. Maltby</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#0a0a0a;color:#00ff41;font-family:"Courier New",monospace}
+#app{display:flex;flex-direction:column;height:100svh;min-height:600px}
+#canvas-wrap{flex:1;position:relative;min-height:280px}
+canvas{width:100%;height:100%;display:block}
+#controls{background:#111;border-top:1px solid #1a3a1a;padding:10px 14px;display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}
+.ctrl-row{display:flex;align-items:center;gap:8px}
+.ctrl-row label{font-size:10px;color:#4a7a4a;min-width:80px;text-transform:uppercase;letter-spacing:1px;user-select:none}
+.val{font-size:11px;color:#00ff41;min-width:28px;text-align:right;user-select:none}
+.slider-wrap{flex:1;display:flex;align-items:center;height:36px}
+.slider-wrap input[type=range]{width:100%;accent-color:#00ff41;cursor:pointer;touch-action:none}
+#seed-row{grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#seed-row label{font-size:10px;color:#4a7a4a;text-transform:uppercase;letter-spacing:1px;min-width:80px;user-select:none}
+select{background:#0a0a0a;color:#00ff41;border:1px solid #1a3a1a;font-family:inherit;font-size:11px;padding:4px 6px;flex:1;min-width:120px;height:30px}
+#phrase-wrap{display:none;flex:1}
+#phrase-input{background:#0a0a0a;color:#00ff41;border:1px solid #1a3a1a;font-family:inherit;font-size:11px;padding:4px 6px;width:100%}
+#btn-row{grid-column:1/-1;display:flex;gap:6px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+button{background:#0a0a0a;color:#00ff41;border:1px solid #1a3a1a;font-family:inherit;font-size:10px;padding:6px 10px;cursor:pointer;text-transform:uppercase;letter-spacing:1px;touch-action:manipulation;min-height:32px}
+button:active{background:#1a3a1a}
+#mic-btn{color:#ffb000;border-color:#3a3000}
+#mic-btn.active{color:#ff4141;border-color:#3a0000}
+#capture-btn{color:#8b5cf6;border-color:#2a1a5a}
+#log-btn{color:#06b6d4;border-color:#0a3a3a}
+#seed-display{font-size:10px;color:#2a5a2a}
+#presets{grid-column:1/-1;border-top:1px solid #1a3a1a;padding-top:8px;margin-top:2px}
+#presets-label{font-size:9px;color:#4a7a4a;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+#preset-btns{display:flex;gap:5px;flex-wrap:wrap}
+.preset-btn{font-size:9px;padding:5px 8px;min-height:28px;border-color:#1a3a1a;color:#6aaa6a;position:relative;min-width:60px;text-align:center}
+.preset-btn.hardcoded{border-color:#1a4a1a}
+.preset-btn.user-slot{border-color:#1a2a3a;color:#4a7aaa}
+.preset-btn.user-slot.filled{color:#00aaff;border-color:#0a4a7a}
+.preset-btn .preset-hint{display:none;position:absolute;bottom:110%;left:50%;transform:translateX(-50%);background:#1a3a1a;color:#00ff41;font-size:9px;padding:3px 6px;white-space:nowrap;z-index:10;pointer-events:none;border:1px solid #2a5a2a}
+.preset-btn:hover .preset-hint{display:block}
+#metrics{background:#0a0a0a;border-top:1px solid #1a3a1a;padding:8px 14px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.metric{display:flex;flex-direction:column;gap:2px;cursor:pointer;user-select:none}
+.metric-label{font-size:9px;text-transform:uppercase;letter-spacing:1px;display:flex;align-items:center;gap:4px}
+.metric-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.metric-val{font-size:13px;font-weight:500}
+.metric-bar{height:3px;background:#1a1a1a;border-radius:2px;overflow:hidden;margin-top:2px}
+.metric-fill{height:100%;border-radius:2px;transition:width 0.1s}
+.metric.muted .metric-val{opacity:0.3}.metric.muted .metric-fill{opacity:0.3}.metric.muted .metric-label{opacity:0.4}
+.m-heat .metric-label{color:#7a5a00}.m-heat .metric-val{color:#ffb000}.m-heat .metric-fill{background:#ffb000}.m-heat .metric-dot{background:#ffb000}
+.m-cold .metric-label{color:#006a7a}.m-cold .metric-val{color:#06b6d4}.m-cold .metric-fill{background:#06b6d4}.m-cold .metric-dot{background:#06b6d4}
+.m-coh .metric-label{color:#2a5a2a}.m-coh .metric-val{color:#00ff41}.m-coh .metric-fill{background:#00ff41}.m-coh .metric-dot{background:#00ff41}
+.m-phase .metric-label{color:#3a1a7a}.m-phase .metric-val{color:#8b5cf6}.m-phase .metric-fill{background:#8b5cf6}.m-phase .metric-dot{background:#8b5cf6}
+#spark-wrap{grid-column:1/-1;position:relative}
+#sparkline{display:block;width:100%;height:40px}
+#notes{max-width:800px;margin:0 auto;padding:2.5rem 1.5rem 3rem;color:#4a7a4a;line-height:1.8;font-size:0.85rem}
+#notes h2{color:#00ff41;font-size:1rem;letter-spacing:2px;text-transform:uppercase;margin-bottom:1.2rem;font-weight:normal}
+#notes p{margin-bottom:1rem;color:#4a7a4a}
+#notes .math{color:#6aaa6a;font-style:italic;margin:1rem 0;padding-left:1rem;border-left:1px solid #1a3a1a}
+#notes .lineage{margin-top:1.5rem;padding-top:1rem;border-top:1px solid #1a3a1a;font-size:0.78rem;color:#2a5a2a}
+#notes a{color:#4a7a4a}
+#save-modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:100;align-items:center;justify-content:center}
+#save-modal.open{display:flex}
+#save-box{background:#111;border:1px solid #1a3a1a;padding:20px;min-width:260px}
+#save-box h3{font-size:11px;color:#4a7a4a;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+#save-name{background:#0a0a0a;color:#00ff41;border:1px solid #1a3a1a;font-family:inherit;font-size:12px;padding:6px 8px;width:100%;margin-bottom:10px}
+#save-box-btns{display:flex;gap:8px}
+</style>
+</head>
+<body>
+<div id="app">
+<div id="canvas-wrap"><canvas id="c"></canvas></div>
+
+<div id="controls">
+<div class="ctrl-row">
+  <label>Deviation</label>
+  <div class="slider-wrap"><input type="range" id="dev" min="0" max="100" value="30" step="1"></div>
+  <span class="val" id="dev-v">30</span>
+</div>
+<div class="ctrl-row">
+  <label>Traces</label>
+  <div class="slider-wrap"><input type="range" id="trc" min="1" max="12" value="5" step="1"></div>
+  <span class="val" id="trc-v">5</span>
+</div>
+<div class="ctrl-row">
+  <label>Color rate</label>
+  <div class="slider-wrap"><input type="range" id="col" min="0" max="100" value="20" step="1"></div>
+  <span class="val" id="col-v">20</span>
+</div>
+<div class="ctrl-row">
+  <label>Speed</label>
+  <div class="slider-wrap"><input type="range" id="spd" min="1" max="100" value="36" step="1"></div>
+  <span class="val" id="spd-v">36</span>
+</div>
+<div class="ctrl-row">
+  <label>Persistence</label>
+  <div class="slider-wrap"><input type="range" id="fde" min="0" max="99" value="82" step="1"></div>
+  <span class="val" id="fde-v">82</span>
+</div>
+<div id="seed-row">
+  <label>Seed</label>
+  <select id="seed-type">
+    <option value="jitter">Timestamp jitter</option>
+    <option value="phrase">Phrase / word</option>
+    <option value="mouse">Mouse entropy</option>
+    <option value="cosmic">Cosmic (random.org)</option>
+    <option value="mic">Mic level</option>
+  </select>
+  <div id="phrase-wrap"><input id="phrase-input" type="text" placeholder="enter seed phrase..." value="Tom Maltby"></div>
+</div>
+<div id="btn-row">
+  <div style="display:flex;gap:6px;flex-wrap:wrap">
+    <button id="mic-btn" onclick="toggleMic()">MIC OFF</button>
+    <button id="capture-btn" onclick="captureFrame()">CAPTURE</button>
+    <button onclick="clearCanvas()">CLEAR</button>
+    <button onclick="reseedTraces()">RESEED</button>
+    <button id="log-btn" onclick="dumpLog()">DUMP LOG</button>
+  </div>
+  <span id="seed-display">seed: jitter</span>
+</div>
+
+<div id="presets">
+  <div id="presets-label">Presets — click to load &nbsp;|&nbsp; long-press user slots to save</div>
+  <div id="preset-btns"></div>
+</div>
+</div>
+
+<div id="metrics">
+  <div class="metric m-heat" id="tog-heat" onclick="toggleMetric('heat')">
+    <span class="metric-label"><span class="metric-dot"></span>Heat peak</span>
+    <span class="metric-val" id="m-heat-val">0.00</span>
+    <div class="metric-bar"><div class="metric-fill" id="m-heat-bar" style="width:0%"></div></div>
+  </div>
+  <div class="metric m-cold" id="tog-cold" onclick="toggleMetric('cold')">
+    <span class="metric-label"><span class="metric-dot"></span>Cold void</span>
+    <span class="metric-val" id="m-cold-val">0.00</span>
+    <div class="metric-bar"><div class="metric-fill" id="m-cold-bar" style="width:0%"></div></div>
+  </div>
+  <div class="metric m-coh" id="tog-coh" onclick="toggleMetric('coh')">
+    <span class="metric-label"><span class="metric-dot"></span>Coherence</span>
+    <span class="metric-val" id="m-coh-val">0.00</span>
+    <div class="metric-bar"><div class="metric-fill" id="m-coh-bar" style="width:0%"></div></div>
+  </div>
+  <div class="metric m-phase" id="tog-phase" onclick="toggleMetric('phase')">
+    <span class="metric-label"><span class="metric-dot"></span>Phase sync</span>
+    <span class="metric-val" id="m-phase-val">0.00</span>
+    <div class="metric-bar"><div class="metric-fill" id="m-phase-bar" style="width:0%"></div></div>
+  </div>
+  <div id="spark-wrap"><canvas id="sparkline"></canvas></div>
+</div>
+</div>
+
+<div id="notes">
+  <h2>Mathematical Notes</h2>
+  <p>The visualization renders hypotrochoids: curves traced by a point on a wheel of radius <em>r</em> rolling inside a fixed circle of radius <em>R</em>, with the drawing point at distance <em>d</em> from the wheel's center.</p>
+  <div class="math">
+    x(t) = (R−r)·cos(t) + d·cos((R−r)/r · t)<br>
+    y(t) = (R−r)·sin(t) − d·sin((R−r)/r · t)
+  </div>
+  <p>Three parameters (R, r, d) are seeded uniquely per trace from a deterministic pseudorandom number generator (mulberry32), producing varied but reproducible geometries. A second noise layer applies per-step random deviation to each plotted point, scaled by the Deviation control — pulling the trace off its deterministic path by an amount proportional to the flux signal.</p>
+  <p>Multiple traces share rotational symmetry around the canvas center, each offset by 2π/n radians.</p>
+  <p>Persistence renders as temporal smear: the canvas fades incrementally rather than clearing, preserving recent path history. Combined with visual neural lag, this produces implicit multi-scale temporal derivatives — momentary, intermediate, and short-term flux — without explicit calculation. The eye integrates them.</p>
+  <p>Seed modes determine the RNG input: timestamp jitter (sampling system clock entropy), phrase hash (deterministic from text input — which has potential cryptographic implications), mouse movement entropy, microphone amplitude, or external quantum randomness (random.org). Each produces a distinct but mathematically equivalent perturbation character.</p>
+  <p>When R/r is rational, traces close into finite flowers. When irrational, they search without resolution. The noise ensures both feel alive.</p>
+  <p><strong>Live metrics</strong> — click any metric to toggle it on the sparkline. Heat peak tracks convergence attractors via dynamic normalization against session maximum. Cold void measures negative space — regions the geometry actively avoids within the drawing radius. Coherence scores harmonic relationships between R/r ratios across traces. Phase sync measures how closely trace cycle positions align. Settings changes and events are logged with full parameter state. DUMP LOG exports timestamped CSV.</p>
+  <div class="lineage">
+    Lineage: clock-jitter environmental flux meter (T. Maltby, 1991) &rarr; <a href="https://www.maltby.org/create">CREATE Framework</a> (2025) &rarr; Flux Meter (2026).<br>
+    &copy; T. Maltby &amp; Claude, 2026. <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>. Recursive attribution required.
+  </div>
+</div>
+
+<div id="save-modal">
+  <div id="save-box">
+    <h3>Name this preset</h3>
+    <input id="save-name" type="text" maxlength="12" placeholder="e.g. Storm...">
+    <div id="save-box-btns">
+      <button onclick="confirmSave()">SAVE</button>
+      <button onclick="cancelSave()">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const sparkCanvas = document.getElementById('sparkline');
+const sparkCtx = sparkCanvas.getContext('2d');
+
+function mulberry32(seed) {
+  let s = seed|0;
+  return function() {
+    s = s+0x6D2B79F5|0;
+    let t = Math.imul(s^s>>>15,1|s);
+    t = t+Math.imul(t^t>>>7,61|t)^t;
+    return ((t^t>>>14)>>>0)/4294967296;
+  };
+}
+function hashStr(s) {
+  let h=0;
+  for(let i=0;i<s.length;i++) h=Math.imul(31,h)+s.charCodeAt(i)|0;
+  return Math.abs(h);
+}
+function gcd(a,b) {
+  a=Math.abs(Math.round(a));b=Math.abs(Math.round(b));
+  while(b){let t=b;b=a%b;a=t;}return a;
+}
+
+const HARDCODED_PRESETS = [
+  { name:'Torus',   dev:30,col:20,fde:82,trc:5, spd:36, seed:'jitter', phrase:'', note:'Edge of chaos — self-organized criticality. The screenshot.' },
+  { name:'Triangle',dev:30,col:20,fde:85,trc:3, spd:40, seed:'phrase', phrase:'Leave the packet better than you found it', note:'Stable triangle. The phrase that signed off from context overflow.' },
+  { name:'Storm',   dev:80,col:50,fde:70,trc:8, spd:60, seed:'jitter', phrase:'', note:'High deviation turbulence. Maximum flux.' },
+  { name:'Void',    dev:15,col:10,fde:95,trc:4, spd:25, seed:'jitter', phrase:'', note:'Slow, high persistence. Cold void emphasis.' },
+  { name:'Kondo',   dev:45,col:30,fde:88,trc:6, spd:45, seed:'jitter', phrase:'', note:'For Nick Reiter. Mid-complexity, room temperature.' },
+];
+
+const USER_SLOT_COUNT = 3;
+let userPresets = JSON.parse(localStorage.getItem('fluxmeter_presets') || '[]');
+while(userPresets.length < USER_SLOT_COUNT) userPresets.push(null);
+
+let pendingSaveSlot = -1;
+
+function saveUserPresets() {
+  localStorage.setItem('fluxmeter_presets', JSON.stringify(userPresets));
+}
+
+function getCurrentState() {
+  return {
+    dev: parseInt(document.getElementById('dev').value),
+    col: parseInt(document.getElementById('col').value),
+    fde: parseInt(document.getElementById('fde').value),
+    trc: parseInt(document.getElementById('trc').value),
+    spd: parseInt(document.getElementById('spd').value),
+    seed: seedMode,
+    phrase: document.getElementById('phrase-input').value,
+    name: 'User'
+  };
+}
+
+function applyPreset(p) {
+  setSlider('dev', p.dev);
+  setSlider('col', p.col);
+  setSlider('fde', p.fde);
+  setSlider('spd', p.spd);
+  const oldTrc = parseInt(document.getElementById('trc').value);
+  setSlider('trc', p.trc);
+  if (p.seed === 'phrase') {
+    document.getElementById('phrase-input').value = p.phrase || '';
+    document.getElementById('phrase-wrap').style.display = 'flex';
+  } else {
+    document.getElementById('phrase-wrap').style.display = 'none';
+  }
+  seedMode = p.seed;
+  document.getElementById('seed-type').value = p.seed;
+  reseed();
+  if (p.trc !== oldTrc) { rebuildTraces(p.trc); }
+  clearCanvas();
+  logSettings('preset:' + p.name);
+}
+
+function setSlider(id, val) {
+  const el = document.getElementById(id);
+  el.value = val;
+  document.getElementById(id+'-v').textContent = val;
+}
+
+function renderPresetButtons() {
+  const wrap = document.getElementById('preset-btns');
+  wrap.innerHTML = '';
+  HARDCODED_PRESETS.forEach((p,i) => {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn hardcoded';
+    btn.textContent = p.name;
+    const hint = document.createElement('span');
+    hint.className = 'preset-hint';
+    hint.textContent = p.note;
+    btn.appendChild(hint);
+    btn.addEventListener('click', () => applyPreset(p));
+    wrap.appendChild(btn);
+  });
+  for(let i=0;i<USER_SLOT_COUNT;i++) {
+    const btn = document.createElement('button');
+    const p = userPresets[i];
+    btn.className = 'preset-btn user-slot' + (p ? ' filled' : '');
+    btn.textContent = p ? p.name : 'USER '+(i+1);
+    if(p) {
+      const hint = document.createElement('span');
+      hint.className = 'preset-hint';
+      hint.textContent = 'Long-press to overwrite';
+      btn.appendChild(hint);
+    }
+    btn.addEventListener('click', () => {
+      if(userPresets[i]) applyPreset(userPresets[i]);
+    });
+    let pressTimer;
+    btn.addEventListener('mousedown', () => { pressTimer = setTimeout(() => openSaveModal(i), 600); });
+    btn.addEventListener('mouseup', () => clearTimeout(pressTimer));
+    btn.addEventListener('touchstart', e => { e.preventDefault(); pressTimer = setTimeout(() => openSaveModal(i), 600); }, {passive:false});
+    btn.addEventListener('touchend', () => clearTimeout(pressTimer));
+    wrap.appendChild(btn);
+  }
+}
+
+function openSaveModal(slotIdx) {
+  pendingSaveSlot = slotIdx;
+  document.getElementById('save-name').value = userPresets[slotIdx]?.name || '';
+  document.getElementById('save-modal').classList.add('open');
+  setTimeout(() => document.getElementById('save-name').focus(), 50);
+}
+function cancelSave() {
+  document.getElementById('save-modal').classList.remove('open');
+  pendingSaveSlot = -1;
+}
+function confirmSave() {
+  if(pendingSaveSlot < 0) return;
+  const name = document.getElementById('save-name').value.trim() || 'User '+(pendingSaveSlot+1);
+  const state = getCurrentState();
+  state.name = name;
+  userPresets[pendingSaveSlot] = state;
+  saveUserPresets();
+  renderPresetButtons();
+  cancelSave();
+}
+document.getElementById('save-name').addEventListener('keydown', e => { if(e.key==='Enter') confirmSave(); if(e.key==='Escape') cancelSave(); });
+
+let rng = mulberry32(Date.now()&0xFFFFFFFF);
+let seedMode = 'jitter';
+let mouseEntropy = 0;
+let micLevel = 0;
+let micActive = false;
+let micStream = null;
+let analyser = null;
+let micData = null;
+let cosmicSeed = null;
+
+let heatMap = null;
+let heatW=0,heatH=0;
+const HEAT_SCALE=4,HEAT_DECAY=0.993;
+let heatRunningMax=0.001;
+const HEAT_MAX_DECAY=0.9999,COLD_SAMPLE_RADIUS=0.35;
+const SPARK_MAX=300;
+let sparkData={heat:[],cold:[],coh:[],phase:[]};
+const sparkVisible={heat:true,cold:true,coh:true,phase:true};
+const sparkColors={heat:'#ffb000',cold:'#06b6d4',coh:'#00ff41',phase:'#8b5cf6'};
+let eventLog=[],frameCount=0;
+const LOG_INTERVAL=30;
+
+function logEvent(type,extra){
+  const row={ts:Date.now(),event_type:type,coherence:0,phase_sync:0,heat_peak:0,cold_void:0,trace_count:traces?traces.length:0,seed_mode:seedMode,params:''};
+  Object.assign(row,extra||{});
+  eventLog.push(row);
+  if(eventLog.length>15000)eventLog.shift();
+}
+function logSettings(changed){
+  logEvent('settings_change',{params:JSON.stringify({changed,dev:document.getElementById('dev').value,trc:document.getElementById('trc').value,col:document.getElementById('col').value,spd:document.getElementById('spd').value,fde:document.getElementById('fde').value,seed:seedMode})});
+}
+
+function initHeatMap(){
+  heatW=Math.ceil(canvas.width/HEAT_SCALE);
+  heatH=Math.ceil(canvas.height/HEAT_SCALE);
+  heatMap=new Float32Array(heatW*heatH);
+  heatRunningMax=0.001;
+}
+function addHeat(x,y){
+  if(!heatMap)return;
+  const hx=Math.floor(x/HEAT_SCALE),hy=Math.floor(y/HEAT_SCALE);
+  if(hx>=0&&hx<heatW&&hy>=0&&hy<heatH)heatMap[hy*heatW+hx]+=1;
+}
+function decayHeat(){
+  if(!heatMap)return;
+  heatRunningMax*=HEAT_MAX_DECAY;
+  let nm=0.001;
+  for(let i=0;i<heatMap.length;i++){heatMap[i]*=HEAT_DECAY;if(heatMap[i]>nm)nm=heatMap[i];}
+  if(nm>heatRunningMax)heatRunningMax=nm;
+}
+function getHeatMetrics(){
+  if(!heatMap)return{peak:0,cold:0};
+  let maxVal=0,minActive=Infinity;
+  const cx=heatW/2,cy=heatH/2,rSq=(heatW*COLD_SAMPLE_RADIUS)**2;
+  let ac=0;
+  for(let y=0;y<heatH;y++)for(let x=0;x<heatW;x++){
+    const v=heatMap[y*heatW+x];
+    if(v>maxVal)maxVal=v;
+    const dx=x-cx,dy=y-cy;
+    if(dx*dx+dy*dy<rSq&&v>0.005){if(v<minActive)minActive=v;ac++;}
+  }
+  return{peak:Math.min(maxVal/heatRunningMax,1),cold:Math.min(ac>20?minActive/(heatRunningMax*0.1):0,1)};
+}
+function getCoherence(tl){
+  if(tl.length<2)return 0;
+  const ratios=tl.map(tr=>Math.round((tr.R/tr.r)*10));
+  let total=0,pairs=0;
+  for(let i=0;i<ratios.length;i++)for(let j=i+1;j<ratios.length;j++){
+    const g=gcd(ratios[i],ratios[j]),mx=Math.max(ratios[i],ratios[j]);
+    total+=mx>0?g/mx:0;pairs++;
+  }
+  return pairs>0?total/pairs:0;
+}
+function getPhaseSync(tl){
+  if(tl.length<2)return 0;
+  const phases=tl.map(tr=>tr.maxT>0?(tr.t%(Math.PI*2))/(Math.PI*2):0);
+  let sum=0,pairs=0;
+  for(let i=0;i<phases.length;i++)for(let j=i+1;j<phases.length;j++){
+    const diff=Math.abs(phases[i]-phases[j]);
+    sum+=1-Math.min(diff,1-diff)*2;pairs++;
+  }
+  return pairs>0?Math.max(0,sum/pairs):0;
+}
+function updateMetricDisplay(id,barId,val){
+  document.getElementById(id).textContent=val.toFixed(2);
+  document.getElementById(barId).style.width=(val*100).toFixed(1)+'%';
+}
+function pushSpark(vals){
+  ['heat','cold','coh','phase'].forEach((k,i)=>{
+    sparkData[k].push(vals[i]);
+    if(sparkData[k].length>SPARK_MAX)sparkData[k].shift();
+  });
+}
+function drawSparkline(){
+  const sw=sparkCanvas.parentElement.clientWidth||300;
+  sparkCanvas.width=sw;sparkCanvas.height=40;
+  sparkCtx.clearRect(0,0,sw,40);
+  ['heat','cold','coh','phase'].forEach(k=>{
+    if(!sparkVisible[k]||sparkData[k].length<2)return;
+    sparkCtx.strokeStyle=sparkColors[k];sparkCtx.lineWidth=1;sparkCtx.globalAlpha=0.85;
+    sparkCtx.beginPath();
+    sparkData[k].forEach((v,i)=>{
+      const x=(i/(SPARK_MAX-1))*sw,y=38-v*36;
+      i===0?sparkCtx.moveTo(x,y):sparkCtx.lineTo(x,y);
+    });
+    sparkCtx.stroke();
+  });
+  sparkCtx.globalAlpha=1;
+}
+function toggleMetric(key){
+  sparkVisible[key]=!sparkVisible[key];
+  const map={heat:'tog-heat',cold:'tog-cold',coh:'tog-coh',phase:'tog-phase'};
+  document.getElementById(map[key]).classList.toggle('muted',!sparkVisible[key]);
+}
+function getSeed(){
+  if(seedMode==='jitter')return(Date.now()^Math.floor(performance.now()*1000))&0xFFFFFFFF;
+  if(seedMode==='phrase')return hashStr(document.getElementById('phrase-input').value||'flux');
+  if(seedMode==='mouse')return(mouseEntropy^Date.now())&0xFFFFFFFF;
+  if(seedMode==='cosmic')return cosmicSeed!==null?cosmicSeed:(Date.now()&0xFFFFFFFF);
+  if(seedMode==='mic')return(Math.floor(micLevel*1000000)^Date.now())&0xFFFFFFFF;
+  return Date.now()&0xFFFFFFFF;
+}
+function reseed(){
+  const s=getSeed();rng=mulberry32(s);
+  document.getElementById('seed-display').textContent='seed: '+seedMode+' ['+(s&0xFFFF)+']';
+}
+async function fetchCosmic(){
+  try{const r=await fetch('https://www.random.org/integers/?num=1&min=0&max=2147483647&col=1&base=10&format=plain&rnd=new');cosmicSeed=parseInt(await r.text());}
+  catch(e){cosmicSeed=Date.now()&0xFFFFFFFF;}
+}
+document.getElementById('seed-type').addEventListener('change',function(){
+  seedMode=this.value;
+  document.getElementById('phrase-wrap').style.display=seedMode==='phrase'?'flex':'none';
+  if(seedMode==='cosmic')fetchCosmic();
+  reseed();logSettings('seed_mode');
+});
+document.getElementById('phrase-input').addEventListener('change',()=>{reseed();logSettings('phrase');});
+document.addEventListener('mousemove',e=>{mouseEntropy=(mouseEntropy*31+e.clientX*1000+e.clientY)&0xFFFFFFFF;});
+
+function setupSlider(id,outId,onChange){
+  const el=document.getElementById(id),out=document.getElementById(outId);
+  let settled;
+  function update(){out.textContent=el.value;if(onChange)onChange(el.value);}
+  function settledUpdate(){clearTimeout(settled);settled=setTimeout(()=>logSettings(id),400);}
+  el.addEventListener('input',()=>{update();settledUpdate();});
+  el.addEventListener('change',()=>{update();settledUpdate();});
+  el.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
+  el.addEventListener('touchmove',e=>{e.stopPropagation();update();},{passive:true});
+  el.addEventListener('touchend',e=>{e.stopPropagation();update();settledUpdate();},{passive:true});
+}
+setupSlider('dev','dev-v');setupSlider('col','col-v');setupSlider('spd','spd-v');setupSlider('fde','fde-v');
+setupSlider('trc','trc-v',v=>{rebuildTraces(parseInt(v));clearCanvas();});
+
+async function toggleMic(){
+  const btn=document.getElementById('mic-btn');
+  if(!micActive){
+    try{
+      micStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+      const ac=new(window.AudioContext||window.webkitAudioContext)();
+      const src=ac.createMediaStreamSource(micStream);
+      analyser=ac.createAnalyser();analyser.fftSize=256;src.connect(analyser);
+      micData=new Uint8Array(analyser.frequencyBinCount);
+      micActive=true;seedMode='mic';
+      document.getElementById('seed-type').value='mic';
+      btn.textContent='MIC ON';btn.classList.add('active');logSettings('mic_on');
+    }catch(e){btn.textContent='MIC ERR';}
+  }else{
+    if(micStream)micStream.getTracks().forEach(t=>t.stop());
+    micActive=false;micLevel=0;btn.textContent='MIC OFF';btn.classList.remove('active');
+    seedMode='jitter';document.getElementById('seed-type').value='jitter';logSettings('mic_off');
+  }
+}
+function getParam(id){return parseFloat(document.getElementById(id).value);}
+function resize(){
+  const wrap=document.getElementById('canvas-wrap');
+  canvas.width=wrap.clientWidth;canvas.height=wrap.clientHeight;initHeatMap();
+}
+resize();window.addEventListener('resize',resize);
+function clearCanvas(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(heatMap){heatMap.fill(0);heatRunningMax=0.001;}
+  reseed();
+  traces.forEach(t=>{t.angle=(t.idx/t.total)*Math.PI*2;t.hue=t.baseHue;t.t=0;});
+  logEvent('clear');
+}
+function reseedTraces(){rebuildTraces(traces.length);clearCanvas();logEvent('reseed');}
+function captureFrame(){
+  const a=document.createElement('a');
+  a.download='flux_'+Date.now()+'.png';
+  a.href=canvas.toDataURL('image/png');a.click();logEvent('capture');
+}
+function dumpLog(){
+  if(eventLog.length===0){alert('No log data yet.');return;}
+  const header='timestamp,event_type,coherence,phase_sync,heat_peak,cold_void,trace_count,seed_mode,params\n';
+  const rows=eventLog.map(e=>`${e.ts},${e.event_type},${(e.coherence||0).toFixed(4)},${(e.phase_sync||0).toFixed(4)},${(e.heat_peak||0).toFixed(4)},${(e.cold_void||0).toFixed(4)},${e.trace_count},${e.seed_mode},"${(e.params||'').replace(/"/g,"'")}"`).join('\n');
+  const a=document.createElement('a');
+  a.download='flux_log_'+Date.now()+'.csv';
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(header+rows);
+  a.click();
+}
+class Trace{
+  constructor(idx,total){
+    this.idx=idx;this.total=total;
+    this.angle=(idx/total)*Math.PI*2;
+    this.baseHue=(idx/total)*360;
+    this.hue=this.baseHue;this.t=0;this.init();
+  }
+  init(){
+    reseed();
+    const base=Math.min(canvas.width,canvas.height)*0.38;
+    this.R=base*(0.4+rng()*0.6);
+    this.r=this.R*(0.1+rng()*0.6);
+    this.d=this.r*(0.3+rng()*1.4);
+    this.stepLen=0.008+rng()*0.015;
+    this.maxT=Math.PI*2*Math.round(3+rng()*7);
+    this.t=0;
+  }
+  getPoint(t,dev){
+    const noise=(rng()-0.5)*2*(dev/100)*40;
+    const x=(this.R-this.r)*Math.cos(t)+this.d*Math.cos(((this.R-this.r)/this.r)*t)+noise;
+    const y=(this.R-this.r)*Math.sin(t)-this.d*Math.sin(((this.R-this.r)/this.r)*t)+noise*0.7;
+    const sa=this.angle;
+    return{x:x*Math.cos(sa)-y*Math.sin(sa),y:x*Math.sin(sa)+y*Math.cos(sa)};
+  }
+}
+let traces=[];
+function rebuildTraces(n){reseed();traces=[];for(let i=0;i<n;i++)traces.push(new Trace(i,n));}
+rebuildTraces(5);
+
+let lastTs=0,metricTs=0;
+function loop(ts){
+  requestAnimationFrame(loop);
+  const dt=Math.min(ts-lastTs,50);lastTs=ts;
+  if(micActive&&analyser){analyser.getByteFrequencyData(micData);micLevel=micData.reduce((a,b)=>a+b,0)/(micData.length*255);}
+  const dev=getParam('dev'),colRate=getParam('col')*0.001,speed=getParam('spd')*0.00008*dt,fade=getParam('fde')/100;
+  const cx=canvas.width/2,cy=canvas.height/2;
+  ctx.fillStyle=`rgba(10,10,10,${1-fade})`;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  decayHeat();
+  traces.forEach(tr=>{
+    if(tr.t>=tr.maxT){tr.init();return;}
+    const steps=Math.max(1,Math.round(speed/tr.stepLen*60));
+    for(let s=0;s<steps;s++){
+      if(tr.t>=tr.maxT)break;
+      const p0=tr.getPoint(tr.t,dev);
+      tr.t+=tr.stepLen;
+      const p1=tr.getPoint(tr.t,dev);
+      tr.hue=(tr.hue+colRate*360)%360;
+      const alpha=micActive?0.4+micLevel*0.6:0.7;
+      ctx.strokeStyle=`hsla(${tr.hue},100%,55%,${alpha})`;
+      ctx.lineWidth=1;ctx.beginPath();
+      ctx.moveTo(cx+p0.x,cy+p0.y);ctx.lineTo(cx+p1.x,cy+p1.y);ctx.stroke();
+      addHeat(cx+p1.x,cy+p1.y);
+    }
+  });
+  frameCount++;
+  if(ts-metricTs>200){
+    metricTs=ts;
+    const heat=getHeatMetrics(),coh=getCoherence(traces),phase=getPhaseSync(traces);
+    updateMetricDisplay('m-heat-val','m-heat-bar',heat.peak);
+    updateMetricDisplay('m-cold-val','m-cold-bar',heat.cold);
+    updateMetricDisplay('m-coh-val','m-coh-bar',coh);
+    updateMetricDisplay('m-phase-val','m-phase-bar',phase);
+    pushSpark([heat.peak,heat.cold,coh,phase]);
+    drawSparkline();
+    if(frameCount%LOG_INTERVAL===0)logEvent('data',{coherence:coh,phase_sync:phase,heat_peak:heat.peak,cold_void:heat.cold});
+  }
+  if(seedMode==='jitter'&&(ts%3000)<50)reseed();
+  else if(seedMode==='mouse'||seedMode==='mic')reseed();
+}
+requestAnimationFrame(loop);
+renderPresetButtons();
+</script>
+</body>
+</html>
